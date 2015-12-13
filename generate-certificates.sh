@@ -1,3 +1,5 @@
+#!/bin/bash
+
 set -e
 
 
@@ -11,6 +13,7 @@ openssl version
 
 openssl genrsa -out rootca.key 2048
 openssl req -x509 -new -sha256 -days 1000 -subj /CN=rootca/ -key rootca.key \
+        -config ./extensions-for-rootca.cnf \
         -out rootca.crt
 
 
@@ -20,6 +23,8 @@ openssl genrsa -out intermediateca.key 2048
 openssl req -new -sha256 -subj /CN=intermediateca/ -key intermediateca.key \
         -out intermediateca.csr
 openssl x509 -req -days 1000 -CA rootca.crt -CAkey rootca.key -CAcreateserial \
+        -extfile ./extensions-for-intermediateca.cnf \
+        -extensions extension \
         -in intermediateca.csr -out intermediateca.crt
 rm intermediateca.csr
 
