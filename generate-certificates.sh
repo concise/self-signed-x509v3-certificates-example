@@ -35,6 +35,7 @@ openssl genrsa -out localhost.key 2048
 openssl req -new -sha256 -subj /CN=localhost/ -key localhost.key \
         -out localhost.csr
 openssl x509 -req -days 1000 -CA intermediateca.crt -CAkey intermediateca.key \
+        -extfile ./extensions-for-localhost.cnf -extensions extension \
         -CAcreateserial -in localhost.csr -out localhost.crt
 rm localhost.csr
 
