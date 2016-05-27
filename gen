@@ -1,0 +1,113 @@
+#!/bin/bash
+
+test "${BASH_SOURCE[0]}" = "$0" || {
+    echo "Error: '${BASH_SOURCE[0]}' should not be sourced"
+    return 1
+}
+
+set -o pipefail         # proper status code for a pipeline
+set -o errexit          # -e exit when seeing a nonzero status code
+set -o nounset          # -u using unbound variable is an error
+shopt -s failglob       # pathname expansion failing is an error
+
+__my_exit_trap__ () {
+    local LAST_STATUS=$? LAST_COMMAND="$BASH_COMMAND"
+    if [[ $LAST_STATUS != 0 ]]
+    then
+        printf '\nCommand `%s` has nonzero exit status.\n\n' "$LAST_COMMAND"
+    fi
+}
+trap __my_exit_trap__ EXIT
+
+##############################################################################
+
+EXE=${BASH_SOURCE[0]}
+CTR=0
+while [[ -L $EXE ]]; do
+        (( ++CTR <= 100 )) || { echo Too many level of symlinks; exit 1; }
+        DIR=$( cd -P "$( dirname "$EXE" )" && pwd )
+        EXE=$( readlink "$EXE" )
+        [[ $EXE = /* ]] || EXE=$DIR/$EXE
+done
+__DIR__=$( cd -P "$( dirname "$EXE" )" && pwd )
+__NAME__=$( basename "$EXE" )
+__FILE__=$__DIR__/$__NAME__
+
+mkdir -p "$__DIR__/tmp"
+mkdir -p "$__DIR__/out"
+cd "$__DIR__/tmp"
+
+##############################################################################
+
+### Make sure you have openssl in your PATH ###
+
+type -a openssl
+openssl version
+
+##############################################################################
+
+### Secret key and certificate for root certificate authority ###
+
+if [[ ! -f rootca.key ]]; then
+  openssl genrsa -out rootca.key 2048
+fi
+
+if [[ ! -f rootca.crt ]]; then
+  openssl req -x509 -new -sha256 -days 1000 -subj /CN=rootca/ -key rootca.key -out rootca.crt -config <(cat<<<'
+    [ req ]
+    distinguished_name = req_distinguished_name
+    x509_extensions = extension
+
+    [ req_distinguished_name ]
+    commonName = rootca
+
+    [ extension ]
+    keyUsage = critical, keyCertSign, cRLSign
+    basicConstraints = critical, CA:TRUE
+  ')
+fi
+
+
+### Secret key and certificate for intermediate certificate authority ###
+
+if [[ ! -f intermediateca.key ]]; then
+  openssl genrsa -out intermediateca.key 2048
+fi
+
+if [[ ! -f intermediateca.crt ]]; then
+  openssl req -new -sha256 -subj /CN=intermediateca/ -key intermediateca.key -out intermediateca.csr
+  openssl x509 -req -days 1000 -CA rootca.crt -CAkey rootca.key -CAcreateserial -in intermediateca.csr -out intermediateca.crt -extensions extension -extfile <(cat<<<'
+    [ req ]
+    distinguished_name = req_distinguished_name
+    x509_extensions = extension
+
+    [ req_distinguished_name ]
+    commonName = intermediateca
+
+    [ extension ]
+    keyUsage = critical, keyCertSign, cRLSign
+    basicConstraints = critical, CA:TRUE, pathlen:0
+  ')
+  rm intermediateca.csr
+fi
+
+
+### Secret key and certificate for localhost ###
+
+if [[ ! -f localhost.key ]]; then
+  openssl genrsa -out localhost.key 2048
+fi
+
+openssl req -new -sha256 -subj /CN=localhost/ -key localhost.key -out localhost.csr
+openssl x509 -req -days 1000 -CA intermediateca.crt -CAkey intermediateca.key -extensions extension -CAcreateserial -in localhost.csr -out localhost.crt -extfile <(cat<<<'
+  [ extension ]
+  subjectAltName = DNS:*
+')
+rm localhost.csr
+
+
+### Certificate chain for localhost ###
+
+cat localhost.crt intermediateca.crt rootca.crt > localhost.crtchain
+
+cp localhost.key localhost.crtchain rootca.crt ../out

@@ -1,9 +1,2 @@
-intermediateca.crt
-intermediateca.key
-intermediateca.srl
-localhost.crt
-localhost.crtchain
-localhost.key
-rootca.crt
-rootca.key
-rootca.srl
+/tmp/
+/out/
