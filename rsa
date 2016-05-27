@@ -101,7 +101,7 @@ fi
 openssl req -new -sha256 -subj /CN=localhost/ -key localhost.key -out localhost.csr
 openssl x509 -req -days 1000 -CA intermediateca.crt -CAkey intermediateca.key -extensions extension -CAcreateserial -in localhost.csr -out localhost.crt -extfile <(cat<<<'
   [ extension ]
-  subjectAltName = DNS:*
+  subjectAltName = DNS:localhost,DNS:*,DNS:*.*,DNS:*.*.*,DNS:*.*.*.*,DNS:*.*.*.*.*,DNS:*.*.*.*.*.*
 ')
 rm localhost.csr
 
