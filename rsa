@@ -108,6 +108,6 @@ rm localhost.csr
 
 ### Certificate chain for localhost ###
 
-cat localhost.crt intermediateca.crt rootca.crt > localhost.crtchain
+cat localhost.crt intermediateca.crt > localhost.crtchain
 
 cp localhost.key localhost.crtchain rootca.crt ../out
