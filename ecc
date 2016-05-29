@@ -21,21 +21,9 @@ trap __my_exit_trap__ EXIT
 
 ##############################################################################
 
-EXE=${BASH_SOURCE[0]}
-CTR=0
-while [[ -L $EXE ]]; do
-        (( ++CTR <= 100 )) || { echo Too many level of symlinks; exit 1; }
-        DIR=$( cd -P "$( dirname "$EXE" )" && pwd )
-        EXE=$( readlink "$EXE" )
-        [[ $EXE = /* ]] || EXE=$DIR/$EXE
-done
-__DIR__=$( cd -P "$( dirname "$EXE" )" && pwd )
-__NAME__=$( basename "$EXE" )
-__FILE__=$__DIR__/$__NAME__
-
-mkdir -p "$__DIR__/tmp"
-mkdir -p "$__DIR__/out"
-cd "$__DIR__/tmp"
+test "$#" = 1
+mkdir -p "$1"
+cd "$1"
 
 ##############################################################################
 
@@ -49,65 +37,56 @@ openssl version
 ### Secret key and certificate for root certificate authority ###
 
 if [[ ! -f rootca.key ]]; then
-  openssl ecparam -name prime256v1 -genkey -noout -out rootca.key
+    openssl ecparam -name prime256v1 -genkey -out rootca.key
 fi
 
 if [[ ! -f rootca.crt ]]; then
-  openssl req -x509 -new -sha256 -days 1000 -subj /CN=rootca/ -key rootca.key -out rootca.crt -config <(cat<<<'
-    [ req ]
-    distinguished_name = req_distinguished_name
-    x509_extensions = extension
+    openssl req -x509 -new -sha256 -days 60 -subj /CN=rootca/ -key rootca.key -out rootca.crt -config <(printf %s '
+        [ req ]
+        distinguished_name = req_distinguished_name
+        x509_extensions = extension
 
-    [ req_distinguished_name ]
-    commonName = rootca
+        [ req_distinguished_name ]
+        commonName = rootca
 
-    [ extension ]
-    keyUsage = critical, keyCertSign, cRLSign
-    basicConstraints = critical, CA:TRUE
-  ')
+        [ extension ]
+        keyUsage = critical, keyCertSign, cRLSign
+        basicConstraints = critical, CA:TRUE
+    ')
 fi
 
 
 ### Secret key and certificate for intermediate certificate authority ###
 
 if [[ ! -f intermediateca.key ]]; then
-  openssl ecparam -name prime256v1 -genkey -noout -out intermediateca.key
+    openssl ecparam -name prime256v1 -genkey -out intermediateca.key
 fi
 
 if [[ ! -f intermediateca.crt ]]; then
-  openssl req -new -sha256 -subj /CN=intermediateca/ -key intermediateca.key -out intermediateca.csr
-  openssl x509 -req -days 1000 -CA rootca.crt -CAkey rootca.key -CAcreateserial -in intermediateca.csr -out intermediateca.crt -extensions extension -extfile <(cat<<<'
-    [ req ]
-    distinguished_name = req_distinguished_name
-    x509_extensions = extension
-
-    [ req_distinguished_name ]
-    commonName = intermediateca
-
-    [ extension ]
-    keyUsage = critical, keyCertSign, cRLSign
-    basicConstraints = critical, CA:TRUE, pathlen:0
-  ')
-  rm intermediateca.csr
+    openssl req -new -sha256 -subj /CN=intermediateca/ -key intermediateca.key -out intermediateca.csr
+    openssl x509 -CA rootca.crt -CAkey rootca.key -set_serial 0 -days 60 -req -in intermediateca.csr -out intermediateca.crt -extfile <(printf %s '
+        keyUsage = critical, keyCertSign, cRLSign
+        basicConstraints = critical, CA:TRUE, pathlen:0
+    ')
+    rm intermediateca.csr
 fi
 
 
 ### Secret key and certificate for localhost ###
 
 if [[ ! -f localhost.key ]]; then
-  openssl ecparam -name prime256v1 -genkey -noout -out localhost.key
+    openssl ecparam -name prime256v1 -genkey -out localhost.key
 fi
 
-openssl req -new -sha256 -subj /CN=localhost/ -key localhost.key -out localhost.csr
-openssl x509 -req -days 1000 -CA intermediateca.crt -CAkey intermediateca.key -extensions extension -CAcreateserial -in localhost.csr -out localhost.crt -extfile <(cat<<<'
-  [ extension ]
-  subjectAltName = DNS:localhost,DNS:example.com,DNS:*.example.com
-')
-rm localhost.csr
+if [[ ! -f localhost.crt ]]; then
+    openssl req -new -sha256 -subj /CN=localhost/ -key localhost.key -out localhost.csr
+    openssl x509 -CA intermediateca.crt -CAkey intermediateca.key -set_serial 0 -days 60 -req -in localhost.csr -out localhost.crt -extfile <(printf %s '
+        subjectAltName = DNS:localhost,DNS:example.com,DNS:*.example.com
+    ')
+    rm localhost.csr
+fi
 
 
 ### Certificate chain for localhost ###
 
 cat localhost.crt intermediateca.crt > localhost.crtchain
-
-cp localhost.key localhost.crtchain rootca.crt ../out
