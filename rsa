@@ -21,21 +21,9 @@ trap __my_exit_trap__ EXIT
 
 ##############################################################################
 
-EXE=${BASH_SOURCE[0]}
-CTR=0
-while [[ -L $EXE ]]; do
-        (( ++CTR <= 100 )) || { echo Too many level of symlinks; exit 1; }
-        DIR=$( cd -P "$( dirname "$EXE" )" && pwd )
-        EXE=$( readlink "$EXE" )
-        [[ $EXE = /* ]] || EXE=$DIR/$EXE
-done
-__DIR__=$( cd -P "$( dirname "$EXE" )" && pwd )
-__NAME__=$( basename "$EXE" )
-__FILE__=$__DIR__/$__NAME__
+test "$#" = 1
 
-mkdir -p "$__DIR__/tmp"
-mkdir -p "$__DIR__/out"
-cd "$__DIR__/tmp"
+cd "$1"
 
 ##############################################################################
 
@@ -89,6 +77,7 @@ if [[ ! -f intermediateca.crt ]]; then
     basicConstraints = critical, CA:TRUE, pathlen:0
   ')
   rm intermediateca.csr
+  rm rootca.srl
 fi
 
 
@@ -98,16 +87,17 @@ if [[ ! -f localhost.key ]]; then
   openssl genrsa -out localhost.key 2048
 fi
 
-openssl req -new -sha256 -subj /CN=localhost/ -key localhost.key -out localhost.csr
-openssl x509 -req -days 1000 -CA intermediateca.crt -CAkey intermediateca.key -extensions extension -CAcreateserial -in localhost.csr -out localhost.crt -extfile <(cat<<<'
-  [ extension ]
-  subjectAltName = DNS:localhost,DNS:example.com,DNS:*.example.com
-')
-rm localhost.csr
+if [[ ! -f localhost.crt ]]; then
+  openssl req -new -sha256 -subj /CN=localhost/ -key localhost.key -out localhost.csr
+  openssl x509 -req -days 1000 -CA intermediateca.crt -CAkey intermediateca.key -extensions extension -CAcreateserial -in localhost.csr -out localhost.crt -extfile <(cat<<<'
+    [ extension ]
+    subjectAltName = DNS:localhost,DNS:example.com,DNS:*.example.com
+  ')
+  rm localhost.csr
+  rm intermediateca.srl
+fi
 
 
 ### Certificate chain for localhost ###
 
 cat localhost.crt intermediateca.crt > localhost.crtchain
-
-cp localhost.key localhost.crtchain rootca.crt ../out
