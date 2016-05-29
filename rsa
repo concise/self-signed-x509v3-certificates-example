@@ -81,7 +81,7 @@ fi
 if [[ ! -f localhost.crt ]]; then
     openssl req -new -sha256 -subj /CN=localhost/ -key localhost.key -out localhost.csr
     openssl x509 -CA intermediateca.crt -CAkey intermediateca.key -set_serial 0 -days 60 -req -in localhost.csr -out localhost.crt -extfile <(printf %s '
-        subjectAltName = DNS:localhost,DNS:example.com,DNS:*.example.com
+        subjectAltName = DNS:localhost, DNS:example.com, DNS:*.example.com
     ')
     rm localhost.csr
 fi
